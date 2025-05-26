@@ -15,6 +15,7 @@ from tensorflow.keras.applications.efficientnet import preprocess_input
 from tensorflow.keras.layers import Input, Dense, LSTM, Embedding, Dropout, add
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import train_test_split
+from nltk.translate.bleu_score import corpus_bleu
 from tqdm import tqdm
 import re
 import pickle
@@ -23,7 +24,7 @@ import pickle
 nltk.download('punkt_tab')
 
 DEBUG = True
-MODE ="trai"
+MODE ="trin"
 
 DATA_DIR = "/Users/ricky/Desktop/CS221/Dataset/captions.txt"
 IMG_DIR = "/Users/ricky/Desktop/CS221/Dataset/Images"
@@ -144,6 +145,8 @@ def main():
                 mapping[img_name] = []
             mapping[img_name].append(caption)
             all_captions.append(caption)
+        with open("mapping.pkl", "wb") as f:
+            pickle.dump(mapping, f)
 
         features={}
         if DEBUG: print("DEBUG: Beginning feature extraction")
@@ -164,7 +167,6 @@ def main():
         tokenizer.fit_on_texts(all_captions)
         vocab_size = len(tokenizer.word_index) + 1
         max_length = max(len(caption.split()) for caption in all_captions)
-        print(max_length)
         with open("tokenizer.pkl", "wb") as f:
             pickle.dump(tokenizer, f)
         if DEBUG: print("DEBUG: Completed tokenization")
@@ -215,6 +217,8 @@ def main():
             tokenizer = pickle.load(f)
         with open("features.pkl", "rb") as f:
             features = pickle.load(f)
+        with open("mapping.pkl", "rb") as f:
+            mapping = pickle.load(f)
         img_name = "truck.jpg"
         # img_name = "69189650_6687da7280.jpg"
         img_path = IMG_DIR + "/" + img_name
@@ -238,6 +242,28 @@ def main():
         image = Image.open(img_path)
         plt.imshow(image)
         plt.show()
+
+        actual, predicted = [] , []
+
+    train, test = train_test_split(list(mapping.keys()), test_size=0.2, random_state=42)
+
+    for key in tqdm(train):
+
+        captions = mapping[key] 
+        # predict the caption for image
+        y_pred = predict_caption(model, features[key], tokenizer, max_length)
+        # split into words
+        actual_captions = [caption.split() for caption in captions]
+        y_pred = y_pred.split()
+        # append to the list
+        actual.append(actual_captions)
+        predicted.append(y_pred)
+
+        # calcuate BLEU score
+    #Unigram
+    print("BLEU-1: %f" % corpus_bleu(actual, predicted, weights=(1.0, 0, 0, 0)))
+    #Bigram
+    print("BLEU-2: %f" % corpus_bleu(actual, predicted, weights=(0.5, 0.5, 0, 0)))
 
 if __name__ == "__main__":
     main()
